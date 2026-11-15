@@ -1,0 +1,28 @@
+﻿"use client";
+import { mockScreens } from "@/lib/mockData";
+export type TechStatus="assigned"|"on_my_way"|"arrived"|"working"|"resolved"|"cannot_fix";
+export type TechTask={id:string;screenId:string;screen:string;location:string;lat:number;lng:number;priority:"urgent"|"medium"|"low";status:TechStatus;title:string;desc:string;photo:string;assigned:string;instructions:string;phone:string;timeline:{id:string;label:string;time:string;note?:string}[];completion?:{notes:string;parts:string;photos:{id:string;name:string;url:string}[];duration:string};escalation?:{reason:string;note?:string}};
+export type TechReport={reference:string;screenId:string;screen:string;location:string;description:string;priority:"urgent"|"medium"|"low";photo?:string;capturedLocation?:{lat:number;lng:number};submittedAt:string};
+const TK="afrah_tech_tasks",RK="afrah_tech_reports",EV="afrah_tech_updated";
+const r=<T,>(k:string,f:T)=>{try{const raw=window.localStorage.getItem(k);return raw?JSON.parse(raw) as T:f;}catch{return f;}};
+const w=<T,>(k:string,v:T)=>{window.localStorage.setItem(k,JSON.stringify(v));window.dispatchEvent(new Event(EV));};
+const seedData=()=>{const a=mockScreens.find(s=>s.name==="Garden City Screen")??mockScreens[4],b=mockScreens.find(s=>s.name==="Jinja Road Screen")??mockScreens[2];return[{id:"tech-001",screenId:a.id,screen:a.name,location:a.location,lat:a.lat,lng:a.lng,priority:"urgent",status:"assigned",title:"No visual output on panel",desc:"Garden City went dark after signal drops from the media player.",photo:"https://picsum.photos/seed/garden-fault/900/540",assigned:"04/04/2024 09:00",instructions:"Restore playback before the 11 AM booking block.",phone:"0773000006",timeline:[]},{id:"tech-002",screenId:b.id,screen:b.name,location:b.location,lat:b.lat,lng:b.lng,priority:"medium",status:"assigned",title:"Cabinet temperature spikes",desc:"Right cabinet bank overheats and brightness dips every 20 minutes.",photo:"https://picsum.photos/seed/jinja-fault/900/540",assigned:"04/04/2024 09:20",instructions:"Inspect fans and power draw.",phone:"0773000006",timeline:[]}] as TechTask[]};
+const all=()=>seedData();
+export const seedTech=()=>{if(!window.localStorage.getItem(TK))w(TK,all());if(!window.localStorage.getItem(RK))w(RK,[]);};
+export const readTech=()=>r<TechTask[]>(TK,all());
+export const writeTech=(v:TechTask[])=>w(TK,v);
+export const readReports=()=>r<TechReport[]>(RK,[]);
+export const writeReports=(v:TechReport[])=>w(RK,v);
+export const techEvent=EV;
+export const labels={assigned:"Assigned",on_my_way:"On My Way",arrived:"Arrived",working:"Working on It",resolved:"Resolved",cannot_fix:"Cannot Fix"} as const;
+export const dirUrl=(t:TechTask)=>`https://www.google.com/maps/search/?api=1&query=${t.lat},${t.lng}`;
+export const patchTask=(id:string,fn:(t:TechTask)=>TechTask)=>{const next=readTech().map(t=>t.id===id?fn(t):t);writeTech(next);return next.find(t=>t.id===id)??null;};
+export const onMyWay=(id:string)=>patchTask(id,t=>({...t,status:"on_my_way",timeline:[...t.timeline,{id:crypto.randomUUID(),label:"On My Way",time:"04/04/2024 09:07"}]}));
+export const arrived=(id:string)=>patchTask(id,t=>({...t,status:"arrived",timeline:[...t.timeline,{id:crypto.randomUUID(),label:`Arrived — GPS: ${t.lat}, ${t.lng}`,time:"04/04/2024 09:15"}]}));
+export const working=(id:string)=>patchTask(id,t=>({...t,status:"working",timeline:[...t.timeline,{id:crypto.randomUUID(),label:"Working on It",time:"04/04/2024 09:22"}]}));
+export const fixed=(id:string,notes:string,parts:string,photos:{id:string;name:string;url:string}[])=>patchTask(id,t=>({...t,status:"resolved",completion:{notes,parts,photos,duration:"4 hours"},timeline:[...t.timeline,{id:crypto.randomUUID(),label:"Resolved",time:"04/04/2024 13:05",note:notes}]}));
+export const cannotFix=(id:string,reason:string,note?:string)=>patchTask(id,t=>({...t,status:"cannot_fix",escalation:{reason,note},timeline:[...t.timeline,{id:crypto.randomUUID(),label:`Cannot Fix — ${reason}`,time:"04/04/2024 13:18",note}]}));
+export const stats=()=>{const tasks=readTech();const active=tasks.filter(t=>!["resolved","cannot_fix"].includes(t.status)).length;const urgent=tasks.filter(t=>t.priority==="urgent"&&!["resolved","cannot_fix"].includes(t.status)).length;const completed=1+tasks.filter(t=>t.status==="resolved").length;return{active,urgent,completed};};
+export const historyStats=()=>{const tasks=readTech();const done=1+tasks.filter(t=>t.status==="resolved").length;const nofix=tasks.filter(t=>t.status==="cannot_fix").length;return{completed:done,total:3+Math.max(0,done-1)+nofix,cannotFixRate:done+nofix===0?0:Math.round(nofix/(done+nofix)*100)};};
+export const createFault=(screenId:string,description:string,priority:"urgent"|"medium"|"low",photo?:string,capturedLocation?:{lat:number;lng:number})=>{const screen=mockScreens.find(s=>s.id===screenId)??mockScreens[0];const reports=readReports();const reference=`FAULT-2024-${String(42+reports.length).padStart(4,"0")}`;writeReports([{reference,screenId:screen.id,screen:screen.name,location:screen.location,description,priority,photo,capturedLocation,submittedAt:"04/04/2024 14:00"},...reports]);writeTech([{id:`tech-${String(readTech().length+1).padStart(3,"0")}`,screenId:screen.id,screen:screen.name,location:screen.location,lat:screen.lat,lng:screen.lng,priority,status:"assigned",title:"New fault report",desc:description,photo:photo??`https://picsum.photos/seed/${screen.id}-fault/900/540`,assigned:"04/04/2024 14:00",instructions:"Verify the root cause and return a completion report.",phone:"0773000006",timeline:[]},...readTech()]);return reference;};
+
